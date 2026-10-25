@@ -1,0 +1,19 @@
+[project]
+name = "nanovna-tuner"
+version = "0.1.0"
+description = "Live NanoVNA SWR measurements served to any browser/phone on the local network"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "pyserial>=3.5",
+    "segno>=1.6.6",
+]
+
+[project.scripts]
+nanovna-tuner = "nanovna_tuner.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

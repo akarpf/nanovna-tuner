@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NanoVNA Tuner</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 12px; background: #fff; color: #111; }
+  .readout { display: flex; gap: 8px; flex-wrap: wrap; }
+  .card { flex: 1 1 140px; border: 1px solid #ccc; border-radius: 8px; padding: 6px 12px; }
+  .label { font-size: 0.8rem; color: #555; }
+  .value { font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  canvas { width: 100%; height: 50vh; display: block; margin-top: 12px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: end; }
+  .controls label { display: flex; flex-direction: column; font-size: 0.8rem; color: #555; }
+  input, select, button { font-size: 1rem; padding: 8px; }
+  input { width: 7em; }
+  #status { margin-top: 8px; font-size: 0.85rem; color: #555; }
+  #status.error { color: #b00020; font-weight: 600; }
+  .actions { flex: 1 1 auto; display: flex; gap: 8px; align-items: flex-start; }
+  #url { font-size: 0.75rem; color: #555; }
+  #url summary { display: inline-block; list-style: none; cursor: pointer; font-size: 1rem; padding: 8px;
+                 border: 1px solid #767676; border-radius: 4px; background: #efefef; color: #111; }
+  #url summary::-webkit-details-marker { display: none; }
+  #url img { display: block; width: 90px; height: 90px; margin: 6px 0 2px; }
+</style>
+</head>
+<body>
+<div class="readout">
+  <div class="card"><div class="label">Min SWR at</div><div class="value" id="minFreq">–</div></div>
+  <div class="card"><div class="label">Min SWR</div><div class="value" id="minSwr">–</div></div>
+  <div class="card"><div class="label">SWR &lt; 2 bandwidth</div><div class="value" id="bw">–</div></div>
+</div>
+
+<canvas id="chart"></canvas>
+
+<div class="controls">
+  <label>Band
+    <select id="band">
+      <option value="">custom</option>
+      <option value="1,30">HF 1–30 MHz</option>
+      <option value="1.7,2.1">160 m</option>
+      <option value="3.3,4.1">80 m</option>
+      <option value="5.2,5.5">60 m</option>
+      <option value="6.8,7.4">40 m</option>
+      <option value="9.9,10.3">30 m</option>
+      <option value="13.8,14.6">20 m</option>
+      <option value="17.9,18.3">17 m</option>
+      <option value="20.8,21.6">15 m</option>
+      <option value="24.7,25.1">12 m</option>
+      <option value="27.5,30">10 m</option>
+      <option value="49.5,54.5">6 m</option>
+      <option value="143,149">2 m</option>
+      <option value="425,445">70 cm</option>
+    </select>
+  </label>
+  <label>Start MHz <input id="start" type="number" step="any" inputmode="decimal"></label>
+  <label>Stop MHz <input id="stop" type="number" step="any" inputmode="decimal"></label>
+  <div class="actions">
+    <button id="apply">Apply</button>
+    <button id="zoom">Zoom to min</button>
+    <details id="url">
+      <summary>QR</summary>
+      <img src="/qr.svg" alt="QR code"><span id="urlText"></span>
+    </details>
+  </div>
+</div>
+<div id="status">Connecting…</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let last = null;
+
+function setStatus(text, isError = false) {
+  $("status").textContent = text;
+  $("status").className = isError ? "error" : "";
+}
+
+async function setRange(startHz, stopHz) {
+  const r = await fetch("/api/range", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ start: Math.round(startHz), stop: Math.round(stopHz) }),
+  });
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}));
+    setStatus(d.detail?.[0]?.msg ?? "Invalid range", true);
+  } else {
+    $("start").value = (startHz / 1e6).toFixed(3);
+    $("stop").value = (stopHz / 1e6).toFixed(3);
+    setStatus("Range set, waiting for sweep…");
+  }
+}
+
+function swr2Bandwidth(d) {
+  if (d.min_swr >= 2) return "–";
+  let lo = d.min_index, hi = d.min_index;
+  while (lo > 0 && d.swr[lo - 1] < 2) lo--;
+  while (hi < d.swr.length - 1 && d.swr[hi + 1] < 2) hi++;
+  const open = lo === 0 || hi === d.swr.length - 1 ? "≥ " : "";
+  return open + ((d.freqs[hi] - d.freqs[lo]) / 1e3).toFixed(0) + " kHz";
+}
+
+function draw(d) {
+  const c = $("chart"), dpr = window.devicePixelRatio || 1;
+  const W = c.clientWidth, H = c.clientHeight;
+  c.width = W * dpr; c.height = H * dpr;
+  const ctx = c.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  const m = { l: 32, r: 28, t: 8, b: 24 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const yMax = Math.min(10, Math.max(3, Math.ceil(Math.max(...d.swr))));
+  const x = f => m.l + (f - d.start) / (d.stop - d.start) * pw;
+  const y = s => m.t + (1 - (Math.min(s, yMax) - 1) / (yMax - 1)) * ph;
+
+  ctx.font = "12px system-ui";
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#ddd";
+  ctx.fillStyle = "#555";
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let s = 1; s <= yMax; s++) {
+    ctx.beginPath(); ctx.moveTo(m.l, y(s)); ctx.lineTo(W - m.r, y(s)); ctx.stroke();
+    ctx.fillText(s, m.l - 6, y(s));
+  }
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (let i = 0; i <= 4; i++) {
+    const f = d.start + (d.stop - d.start) * i / 4;
+    ctx.beginPath(); ctx.moveTo(x(f), m.t); ctx.lineTo(x(f), H - m.b); ctx.stroke();
+    ctx.fillText((f / 1e6).toFixed(3), x(f), H - m.b + 6);
+  }
+
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = "#e08000";
+  ctx.beginPath(); ctx.moveTo(m.l, y(2)); ctx.lineTo(W - m.r, y(2)); ctx.stroke();
+  const mx = x(d.min_freq);
+  ctx.strokeStyle = "#d00";
+  ctx.beginPath(); ctx.moveTo(mx, m.t); ctx.lineTo(mx, H - m.b); ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.strokeStyle = "#0057d9";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  d.freqs.forEach((f, i) => i ? ctx.lineTo(x(f), y(d.swr[i])) : ctx.moveTo(x(f), y(d.swr[i])));
+  ctx.stroke();
+
+  ctx.fillStyle = "#d00";
+  ctx.beginPath(); ctx.arc(mx, y(d.min_swr), 5, 0, 2 * Math.PI); ctx.fill();
+}
+
+function render(d) {
+  $("minFreq").textContent = (d.min_freq / 1e6).toFixed(3) + " MHz";
+  $("minSwr").textContent = d.min_swr.toFixed(2);
+  $("bw").textContent = swr2Bandwidth(d);
+  for (const id of ["start", "stop"]) {
+    if (document.activeElement !== $(id)) $(id).value = (d[id] / 1e6).toFixed(3);
+  }
+  draw(d);
+}
+
+async function poll() {
+  try {
+    const r = await fetch("/api/sweep", { cache: "no-store" });
+    const d = await r.json();
+    if (d.error) {
+      setStatus(d.error, true);
+    } else {
+      last = d;
+      render(d);
+      setStatus("Updated " + new Date(d.timestamp * 1000).toLocaleTimeString());
+    }
+  } catch {
+    setStatus("Server unreachable", true);
+  }
+  setTimeout(poll, 1000);
+}
+
+$("band").addEventListener("change", e => {
+  if (!e.target.value) return;
+  const [a, b] = e.target.value.split(",").map(Number);
+  setRange(a * 1e6, b * 1e6);
+});
+$("apply").addEventListener("click", () => {
+  $("band").value = "";
+  setRange(parseFloat($("start").value) * 1e6, parseFloat($("stop").value) * 1e6);
+});
+$("zoom").addEventListener("click", () => {
+  if (!last) return;
+  const half = Math.max((last.stop - last.start) / 10, 10e3);
+  $("band").value = "";
+  setRange(Math.max(last.min_freq - half, 10e3), last.min_freq + half);
+});
+window.addEventListener("resize", () => last && draw(last));
+
+fetch("/api/info").then(r => r.json()).then(({ url }) => {
+  $("urlText").textContent = url.replace("http://", "");
+});
+poll();
+</script>
+</body>
+</html>
