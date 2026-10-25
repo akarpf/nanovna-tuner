@@ -23,6 +23,10 @@
                  border: 1px solid #767676; border-radius: 4px; background: #efefef; color: #111; }
   #url summary::-webkit-details-marker { display: none; }
   #url img { display: block; width: 90px; height: 90px; margin: 6px 0 2px; }
+  #cal { margin-top: 12px; border: 1px solid #ccc; border-radius: 8px; padding: 8px 12px; }
+  #cal .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  #cal button.done { background: #d7f5dc; border-color: #2e7d32; }
+  #calInfo { margin-top: 6px; font-size: 0.85rem; color: #555; }
 </style>
 </head>
 <body>
@@ -66,6 +70,15 @@
   </div>
 </div>
 <div id="status">Connecting…</div>
+<div id="cal" hidden>
+  <div class="label">Calibration – set the range, connect each standard where the antenna goes, then tap it:</div>
+  <div class="row">
+    <button data-std="open">Open</button>
+    <button data-std="short">Short</button>
+    <button data-std="load">Load</button>
+  </div>
+  <div id="calInfo"></div>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -163,17 +176,48 @@ async function poll() {
   try {
     const r = await fetch("/api/sweep", { cache: "no-store" });
     const d = await r.json();
+    updateCal(d.cal);
     if (d.error) {
       setStatus(d.error, true);
     } else {
       last = d;
       render(d);
-      setStatus("Updated " + new Date(d.timestamp * 1000).toLocaleTimeString());
+      setStatus("Updated " + new Date(d.timestamp * 1000).toLocaleTimeString() + " · " + d.device);
     }
   } catch {
     setStatus("Server unreachable", true);
   }
   setTimeout(poll, 1000);
+}
+
+let calBusy = false;
+function updateCal(cal) {
+  $("cal").hidden = !cal;
+  if (!cal || calBusy) return;
+  for (const b of document.querySelectorAll("#cal button")) {
+    b.classList.toggle("done", cal.measured.includes(b.dataset.std));
+  }
+  $("calInfo").textContent = cal.valid
+    ? `Calibrated ${(cal.start / 1e6).toFixed(3)}–${(cal.stop / 1e6).toFixed(3)} MHz`
+    : "Not calibrated";
+}
+
+for (const b of document.querySelectorAll("#cal button")) {
+  b.addEventListener("click", async () => {
+    calBusy = true;
+    document.querySelectorAll("#cal button").forEach(x => x.disabled = true);
+    $("calInfo").textContent = `Measuring ${b.dataset.std}…`;
+    try {
+      const r = await fetch(`/api/cal/${b.dataset.std}`, { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      $("calInfo").textContent = r.ok ? `${b.dataset.std} measured` : (d.detail ?? "Calibration failed");
+      if (r.ok) b.classList.add("done");
+    } catch {
+      $("calInfo").textContent = "Server unreachable";
+    }
+    document.querySelectorAll("#cal button").forEach(x => x.disabled = false);
+    setTimeout(() => calBusy = false, 1500);
+  });
 }
 
 $("band").addEventListener("change", e => {

@@ -1,10 +1,12 @@
 import argparse
 import logging
 import socket
+from pathlib import Path
 
 import uvicorn
 
-from .nanovna import NanoVNA, SimulatedNanoVNA
+from .calibration import Calibration
+from .nanovna import SimulatedNanoVNA, open_device
 from .server import SweepWorker, create_app
 
 
@@ -31,8 +33,9 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    connect = SimulatedNanoVNA if args.simulate else (lambda: NanoVNA(args.port))
-    worker = SweepWorker(connect, int(args.start * 1e6), int(args.stop * 1e6), args.points)
+    connect = SimulatedNanoVNA if args.simulate else (lambda: open_device(args.port))
+    calibration = Calibration(Path.home() / ".nanovna-tuner" / "calibration.json")
+    worker = SweepWorker(connect, int(args.start * 1e6), int(args.stop * 1e6), args.points, calibration)
     worker.start()
 
     url = f"http://{lan_ip()}:{args.http_port}"
