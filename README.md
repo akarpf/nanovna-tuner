@@ -98,4 +98,8 @@ GitHub Actions runs the tests on macOS, Windows and Linux for every push. To pub
 
 ## License
 
-MIT – see [LICENSE](LICENSE).
+Copyright © 2026 Andreas Karpf
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; see [LICENSE](LICENSE) for details.
+
+In short: you may use, study, share and modify it freely. If you distribute it or a modified version, you must do so under the same license and make the source code available.

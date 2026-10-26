@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Andreas Karpf
+# SPDX-License-Identifier: GPL-3.0-or-later
 import argparse
 import logging
 import socket
@@ -43,8 +45,15 @@ def bind(host: str, port: int) -> socket.socket:
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Serve live NanoVNA SWR sweeps over HTTP")
-    p.add_argument("--version", action="version", version=f"nanovna-tuner {__version__}")
+    p = argparse.ArgumentParser(description="Serve live NanoVNA SWR sweeps over HTTP",
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--version", action="version", version=(
+        f"nanovna-tuner {__version__}\n"
+        "Copyright (C) 2026 Andreas Karpf\n"
+        "License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\n"
+        "This is free software: you are free to change and redistribute it.\n"
+        "There is NO WARRANTY, to the extent permitted by law."
+    ))
     p.add_argument("--port", help="serial port (default: auto-detect)")
     p.add_argument("--simulate", action="store_true", help="use a simulated antenna instead of a NanoVNA")
     p.add_argument("--start", type=float, default=1.0, help="start frequency in MHz (default 1)")

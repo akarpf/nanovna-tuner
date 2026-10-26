@@ -3,7 +3,7 @@ name = "nanovna-tuner"
 dynamic = ["version"]
 description = "Live NanoVNA SWR measurements served to any browser/phone on the local network"
 readme = "README.md"
-license = "MIT"
+license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [

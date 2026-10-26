@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Andreas Karpf
+# SPDX-License-Identifier: GPL-3.0-or-later
 # PyInstaller recipe for a single-file executable: uv run --with pyinstaller pyinstaller packaging/nanovna-tuner.spec
 import os
 
