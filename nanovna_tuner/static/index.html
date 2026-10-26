@@ -3,40 +3,201 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#070b10">
 <title>NanoVNA Tuner</title>
+<script>
+  // set before first paint to avoid a flash of the wrong theme
+  document.documentElement.dataset.theme = localStorage.getItem("theme") || "dark";
+</script>
 <style>
-  body { font-family: system-ui, sans-serif; margin: 0; padding: 12px; background: #fff; color: #111; }
-  .readout { display: flex; gap: 8px; flex-wrap: wrap; }
-  .card { flex: 1 1 140px; border: 1px solid #ccc; border-radius: 8px; padding: 6px 12px; }
-  .label { font-size: 0.8rem; color: #555; }
-  .value { font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-  canvas { width: 100%; height: 50vh; display: block; margin-top: 12px; }
-  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: end; }
-  .controls label { display: flex; flex-direction: column; font-size: 0.8rem; color: #555; }
-  input, select, button { font-size: 1rem; padding: 8px; }
-  input { width: 7em; }
-  #status { margin-top: 8px; font-size: 0.85rem; color: #555; }
-  #status.error { color: #b00020; font-weight: 600; }
-  .actions { flex: 1 1 auto; display: flex; gap: 8px; align-items: flex-start; }
-  #url { font-size: 0.75rem; color: #555; }
-  #url summary { display: inline-block; list-style: none; cursor: pointer; font-size: 1rem; padding: 8px;
-                 border: 1px solid #767676; border-radius: 4px; background: #efefef; color: #111; }
+  :root {
+    --bg: #090d12;
+    --panel: #0d1318;
+    --accent-rgb: 132, 206, 216;
+    --line: rgba(var(--accent-rgb), 0.14);
+    --line-strong: rgba(var(--accent-rgb), 0.45);
+    --cyan: #8fd2db;
+    --cyan-dim: #64808a;
+    --amber: #e2b679;
+    --magenta: #d98aa8;
+    --magenta-rgb: 217, 138, 168;
+    --green: #8fd4ab;
+    --green-rgb: 143, 212, 171;
+    --field-bg: rgba(9, 13, 18, 0.6);
+    --led-off: #2a3238;
+    --scan: rgba(255, 255, 255, 0.012);
+    --glow-cyan: 0 0 0 1px rgba(var(--accent-rgb), 0.12), 0 0 12px rgba(var(--accent-rgb), 0.08);
+    --glow-amber: 0 0 10px rgba(226, 182, 121, 0.18);
+    --glow-magenta: none;
+    --halo-top: rgba(var(--accent-rgb), 0.06);
+    --halo-bottom: rgba(217, 138, 168, 0.035);
+    /* chart */
+    --grid-minor: rgba(var(--accent-rgb), 0.03);
+    --grid-major: rgba(var(--accent-rgb), 0.09);
+    --area-top: rgba(var(--accent-rgb), 0);
+    --area-bottom: rgba(var(--accent-rgb), 0.07);
+    --trace-core: #c9eef3;
+    --trace-blur: 6;
+    --tag-bg: rgba(9, 13, 18, 0.8);
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    color-scheme: dark;
+  }
+  /* light: cream instrument panel with teal ink and orange readouts */
+  :root[data-theme="light"] {
+    --bg: #eeebe4;
+    --panel: #f6f4ef;
+    --accent-rgb: 52, 106, 114;
+    --line: rgba(var(--accent-rgb), 0.16);
+    --line-strong: rgba(var(--accent-rgb), 0.45);
+    --cyan: #3a6c74;
+    --cyan-dim: #7d8786;
+    --amber: #a5683a;
+    --magenta: #a5576f;
+    --magenta-rgb: 165, 87, 111;
+    --green: #4c7f61;
+    --green-rgb: 76, 127, 97;
+    --field-bg: rgba(255, 255, 255, 0.55);
+    --led-off: #d3cec4;
+    --scan: rgba(0, 0, 0, 0.012);
+    --glow-cyan: 0 0 0 1px rgba(var(--accent-rgb), 0.1);
+    --glow-amber: none;
+    --glow-magenta: none;
+    --halo-top: rgba(var(--accent-rgb), 0.04);
+    --halo-bottom: rgba(165, 104, 58, 0.03);
+    --grid-minor: rgba(var(--accent-rgb), 0.035);
+    --grid-major: rgba(var(--accent-rgb), 0.1);
+    --area-top: rgba(var(--accent-rgb), 0);
+    --area-bottom: rgba(var(--accent-rgb), 0.06);
+    --trace-core: #3a6c74;
+    --trace-blur: 0;
+    --tag-bg: rgba(246, 244, 239, 0.9);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  .no-transition * { transition: none !important; }
+  body {
+    margin: 0; padding: 14px; min-height: 100vh;
+    font-family: var(--mono); color: var(--cyan);
+    background:
+      radial-gradient(ellipse at 50% -20%, var(--halo-top), transparent 60%),
+      radial-gradient(ellipse at 50% 120%, var(--halo-bottom), transparent 55%),
+      var(--bg);
+  }
+  /* CRT scanlines */
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 10;
+    background: repeating-linear-gradient(to bottom, var(--scan) 0 1px, transparent 1px 3px);
+  }
+  header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--line);
+    letter-spacing: 0.35em; text-transform: uppercase; font-size: 0.72rem; font-weight: 300;
+  }
+  header .title b { color: var(--amber); font-weight: 400; }
+  header .sub { margin-left: auto; color: var(--cyan-dim); font-size: 0.65rem; letter-spacing: 0.2em; }
+  #theme { padding: 5px 9px; font-size: 0.6rem; letter-spacing: 0.2em; color: var(--cyan-dim); }
+  #theme::before { content: "◐ "; }
+  #led {
+    width: 7px; height: 7px; border-radius: 50%; flex: none;
+    background: var(--led-off); transition: background 0.6s, box-shadow 0.6s;
+  }
+  #led.live { background: var(--green); box-shadow: 0 0 5px rgba(var(--green-rgb), 0.6); animation: pulse 1.2s ease-out; }
+  #led.error { background: var(--magenta); box-shadow: 0 0 5px rgba(var(--magenta-rgb), 0.6); }
+  @keyframes pulse { from { box-shadow: 0 0 9px 2px rgba(var(--green-rgb), 0.7); } }
+
+  .readout { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .card, .screen, #cal {
+    position: relative; background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.025), transparent 50%), var(--panel);
+    border: 1px solid var(--line); border-radius: 2px;
+  }
+  /* corner brackets */
+  .card::before, .screen::before {
+    content: ""; position: absolute; inset: -1px; pointer-events: none;
+    background:
+      linear-gradient(var(--line-strong), var(--line-strong)) top left / 7px 1px,
+      linear-gradient(var(--line-strong), var(--line-strong)) top left / 1px 7px,
+      linear-gradient(var(--line-strong), var(--line-strong)) bottom right / 7px 1px,
+      linear-gradient(var(--line-strong), var(--line-strong)) bottom right / 1px 7px;
+    background-repeat: no-repeat;
+  }
+  .card { padding: 9px 12px 11px; min-width: 0; }
+  .label { font-size: 0.62rem; color: var(--cyan-dim); text-transform: uppercase; letter-spacing: 0.2em; white-space: nowrap; }
+  .value {
+    margin-top: 6px; font-size: clamp(1.05rem, 2.4vw, 1.6rem); font-weight: 300;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums; color: var(--amber); text-shadow: var(--glow-amber);
+  }
+  .value small { font-size: 0.5em; margin-left: 0.35em; color: var(--cyan-dim); text-shadow: none; }
+  .screen { margin-top: 12px; padding: 6px; }
+  canvas { width: 100%; height: 48vh; display: block; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; align-items: end; }
+  .controls label {
+    display: flex; flex-direction: column; gap: 5px;
+    font-size: 0.62rem; color: var(--cyan-dim); text-transform: uppercase; letter-spacing: 0.2em;
+  }
+  input, select, button, #url summary {
+    font: inherit; font-size: 0.9rem; padding: 9px 12px; border-radius: 2px;
+    color: var(--cyan); background: var(--field-bg); border: 1px solid var(--line);
+    outline: none; transition: box-shadow 0.2s, border-color 0.2s, background 0.2s, color 0.2s;
+  }
+  input { width: 8em; color: var(--amber); }
+  input:focus, select:focus { border-color: var(--line-strong); box-shadow: var(--glow-cyan); }
+  button, #url summary {
+    cursor: pointer; text-transform: uppercase; letter-spacing: 0.16em; font-size: 0.72rem; padding: 11px 14px;
+  }
+  button:hover, #url summary:hover { border-color: var(--line-strong); box-shadow: var(--glow-cyan); }
+  button:active { background: rgba(var(--accent-rgb), 0.1); }
+  button:disabled { opacity: 0.4; cursor: wait; }
+  #apply { border-color: var(--line-strong); background: rgba(var(--accent-rgb), 0.08); }
+
+  .actions { flex: 1 1 auto; display: flex; gap: 10px; align-items: flex-start; }
+  #url { font-size: 0.7rem; color: var(--cyan-dim); letter-spacing: 0.05em; }
+  #url summary { display: inline-block; list-style: none; }
   #url summary::-webkit-details-marker { display: none; }
-  #url img { display: block; width: 90px; height: 90px; margin: 6px 0 2px; }
-  #cal { margin-top: 12px; border: 1px solid #ccc; border-radius: 8px; padding: 8px 12px; }
-  #cal .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
-  #cal button.done { background: #d7f5dc; border-color: #2e7d32; }
-  #calInfo { margin-top: 6px; font-size: 0.85rem; color: #555; }
+  #url[open] summary { border-color: var(--line-strong); }
+  /* QR codes need a light quiet zone to scan reliably */
+  #url img { display: block; width: 100px; height: 100px; margin: 8px 0 4px; background: #fff; padding: 4px; border-radius: 2px; }
+
+  #status { margin-top: 10px; font-size: 0.68rem; color: var(--cyan-dim); letter-spacing: 0.1em; }
+  #status::before { content: "› "; color: var(--line-strong); }
+  #status.error { color: var(--magenta); text-shadow: var(--glow-magenta); }
+
+  #cal { margin-top: 12px; padding: 10px 12px; }
+  #cal .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+  #cal button.done { color: var(--green); border-color: rgba(var(--green-rgb), 0.5); }
+  #cal button.done::after { content: " ✓"; }
+  #calClear { margin-left: auto; color: var(--magenta); border-color: rgba(var(--magenta-rgb), 0.3); }
+  #calInfo { margin-top: 8px; font-size: 0.68rem; color: var(--cyan-dim); }
+
+  @media (max-width: 700px) {
+    .readout { grid-template-columns: 1fr 1fr; }
+    .value { font-size: clamp(1.1rem, 6vw, 1.6rem); }
+  }
+  @media (max-width: 480px) {
+    body { padding: 10px; }
+    .readout { gap: 8px; }
+    header .sub { display: none; }
+    #theme { margin-left: auto; }
+  }
 </style>
 </head>
 <body>
+<header>
+  <span id="led"></span>
+  <span class="title">NanoVNA <b>Tuner</b></span>
+  <span class="sub" id="device">no signal</span>
+  <button id="theme" type="button"></button>
+</header>
+
 <div class="readout">
-  <div class="card"><div class="label">Min SWR at</div><div class="value" id="minFreq">–</div></div>
+  <div class="card"><div class="label">Resonance</div><div class="value"><span id="minFreq">–</span><small>MHz</small></div></div>
   <div class="card"><div class="label">Min SWR</div><div class="value" id="minSwr">–</div></div>
-  <div class="card"><div class="label">SWR &lt; 2 bandwidth</div><div class="value" id="bw">–</div></div>
+  <div class="card"><div class="label">SWR&lt;2 width</div><div class="value"><span id="bw">–</span><small>kHz</small></div></div>
+  <div class="card"><div class="label">Impedance</div><div class="value"><span id="z">–</span><small>Ω</small></div></div>
 </div>
 
-<canvas id="chart"></canvas>
+<div class="screen"><canvas id="chart"></canvas></div>
 
 <div class="controls">
   <label>Band
@@ -65,7 +226,7 @@
     <button id="zoom">Zoom to min</button>
     <details id="url">
       <summary>QR</summary>
-      <img src="/qr.svg" alt="QR code"><span id="urlText"></span>
+      <img id="qrImg" alt="QR code"><span id="urlText"></span>
     </details>
   </div>
 </div>
@@ -76,6 +237,7 @@
     <button data-std="open">Open</button>
     <button data-std="short">Short</button>
     <button data-std="load">Load</button>
+    <button id="calClear">Clear</button>
   </div>
   <div id="calInfo"></div>
 </div>
@@ -84,20 +246,34 @@
 const $ = id => document.getElementById(id);
 let last = null;
 
+// token arrives via the QR link (?t=...) and is remembered for later visits
+const token = new URLSearchParams(location.search).get("t") || localStorage.getItem("token") || "";
+if (token) localStorage.setItem("token", token);
+const api = (path, opts = {}) =>
+  fetch(path, { ...opts, headers: { ...opts.headers, ...(token && { "X-Token": token }) } });
+
 function setStatus(text, isError = false) {
   $("status").textContent = text;
   $("status").className = isError ? "error" : "";
+  if (isError) $("led").className = "error";
+}
+
+function blink() {
+  const led = $("led");
+  led.className = "";
+  void led.offsetWidth;  // restart the CSS pulse animation
+  led.className = "live";
 }
 
 async function setRange(startHz, stopHz) {
-  const r = await fetch("/api/range", {
+  const r = await api("/api/range", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ start: Math.round(startHz), stop: Math.round(stopHz) }),
   });
   if (!r.ok) {
     const d = await r.json().catch(() => ({}));
-    setStatus(d.detail?.[0]?.msg ?? "Invalid range", true);
+    setStatus(typeof d.detail === "string" ? d.detail : d.detail?.[0]?.msg ?? "Invalid range", true);
   } else {
     $("start").value = (startHz / 1e6).toFixed(3);
     $("stop").value = (stopHz / 1e6).toFixed(3);
@@ -111,7 +287,7 @@ function swr2Bandwidth(d) {
   while (lo > 0 && d.swr[lo - 1] < 2) lo--;
   while (hi < d.swr.length - 1 && d.swr[hi + 1] < 2) hi++;
   const open = lo === 0 || hi === d.swr.length - 1 ? "≥ " : "";
-  return open + ((d.freqs[hi] - d.freqs[lo]) / 1e3).toFixed(0) + " kHz";
+  return open + ((d.freqs[hi] - d.freqs[lo]) / 1e3).toFixed(0);
 }
 
 function draw(d) {
@@ -122,103 +298,197 @@ function draw(d) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
 
-  const m = { l: 32, r: 28, t: 8, b: 24 };
+  const css = getComputedStyle(document.documentElement);
+  const col = n => css.getPropertyValue(n).trim();
+  const cyan = col("--cyan"), amber = col("--amber"), magenta = col("--magenta"), dim = col("--cyan-dim");
+  const font = col("--mono"), traceBlur = Number(col("--trace-blur"));
+
+  const m = { l: 34, r: 30, t: 10, b: 26 };
   const pw = W - m.l - m.r, ph = H - m.t - m.b;
   const yMax = Math.min(10, Math.max(3, Math.ceil(Math.max(...d.swr))));
   const x = f => m.l + (f - d.start) / (d.stop - d.start) * pw;
   const y = s => m.t + (1 - (Math.min(s, yMax) - 1) / (yMax - 1)) * ph;
 
-  ctx.font = "12px system-ui";
+  // grid: fine minor lines plus brighter major lines, like an oscilloscope graticule
   ctx.lineWidth = 1;
-  ctx.strokeStyle = "#ddd";
-  ctx.fillStyle = "#555";
+  ctx.strokeStyle = col("--grid-minor");
+  for (let i = 0; i <= 20; i++) {
+    const gx = m.l + pw * i / 20;
+    ctx.beginPath(); ctx.moveTo(gx, m.t); ctx.lineTo(gx, m.t + ph); ctx.stroke();
+  }
+  ctx.font = `11px ${font}`;
+  ctx.fillStyle = dim;
+  ctx.strokeStyle = col("--grid-major");
   ctx.textAlign = "right"; ctx.textBaseline = "middle";
   for (let s = 1; s <= yMax; s++) {
     ctx.beginPath(); ctx.moveTo(m.l, y(s)); ctx.lineTo(W - m.r, y(s)); ctx.stroke();
-    ctx.fillText(s, m.l - 6, y(s));
+    ctx.fillText(s, m.l - 8, y(s));
   }
   ctx.textAlign = "center"; ctx.textBaseline = "top";
   for (let i = 0; i <= 4; i++) {
     const f = d.start + (d.stop - d.start) * i / 4;
     ctx.beginPath(); ctx.moveTo(x(f), m.t); ctx.lineTo(x(f), H - m.b); ctx.stroke();
-    ctx.fillText((f / 1e6).toFixed(3), x(f), H - m.b + 6);
+    ctx.fillText((f / 1e6).toFixed(3), x(f), H - m.b + 8);
   }
 
-  ctx.setLineDash([6, 4]);
-  ctx.strokeStyle = "#e08000";
+  // SWR 2 threshold
+  ctx.setLineDash([2, 6]);
+  ctx.strokeStyle = amber;
+  ctx.globalAlpha = 0.45;
   ctx.beginPath(); ctx.moveTo(m.l, y(2)); ctx.lineTo(W - m.r, y(2)); ctx.stroke();
-  const mx = x(d.min_freq);
-  ctx.strokeStyle = "#d00";
-  ctx.beginPath(); ctx.moveTo(mx, m.t); ctx.lineTo(mx, H - m.b); ctx.stroke();
+  ctx.globalAlpha = 1;
   ctx.setLineDash([]);
 
-  ctx.strokeStyle = "#0057d9";
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  d.freqs.forEach((f, i) => i ? ctx.lineTo(x(f), y(d.swr[i])) : ctx.moveTo(x(f), y(d.swr[i])));
-  ctx.stroke();
+  // area under the curve, fading downwards
+  const path = new Path2D();
+  d.freqs.forEach((f, i) => i ? path.lineTo(x(f), y(d.swr[i])) : path.moveTo(x(f), y(d.swr[i])));
+  const area = new Path2D(path);
+  area.lineTo(x(d.freqs.at(-1)), m.t + ph);
+  area.lineTo(x(d.freqs[0]), m.t + ph);
+  area.closePath();
+  const grad = ctx.createLinearGradient(0, m.t, 0, m.t + ph);
+  grad.addColorStop(0, col("--area-top"));
+  grad.addColorStop(1, col("--area-bottom"));
+  ctx.fillStyle = grad;
+  ctx.fill(area);
 
-  ctx.fillStyle = "#d00";
-  ctx.beginPath(); ctx.arc(mx, y(d.min_swr), 5, 0, 2 * Math.PI); ctx.fill();
+  // phosphor trace: wide soft glow underneath a crisp core
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = cyan;
+  ctx.shadowColor = cyan;
+  ctx.shadowBlur = traceBlur;
+  ctx.lineWidth = 1.75;
+  ctx.stroke(path);
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = col("--trace-core");
+  ctx.lineWidth = 0.75;
+  ctx.stroke(path);
+
+  // minimum marker
+  const mx = x(d.min_freq), my = y(d.min_swr);
+  ctx.strokeStyle = magenta;
+  ctx.globalAlpha = 0.35;
+  ctx.setLineDash([2, 4]);
+  ctx.beginPath(); ctx.moveTo(mx, m.t); ctx.lineTo(mx, H - m.b); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 1.25;
+  ctx.beginPath(); ctx.arc(mx, my, 5, 0, 2 * Math.PI); ctx.stroke();
+  ctx.fillStyle = magenta;
+  ctx.beginPath(); ctx.arc(mx, my, 1.75, 0, 2 * Math.PI); ctx.fill();
+
+  const tag = `${(d.min_freq / 1e6).toFixed(3)} MHz · ${d.min_swr.toFixed(2)}`;
+  ctx.font = `11px ${font}`;
+  const tw = ctx.measureText(tag).width + 14;
+  const tx = Math.min(Math.max(mx - tw / 2, m.l), W - m.r - tw);
+  const ty = Math.max(my - 32, m.t);
+  ctx.fillStyle = col("--tag-bg");
+  ctx.fillRect(tx, ty, tw, 19);
+  ctx.strokeStyle = col("--grid-major");
+  ctx.lineWidth = 1;
+  ctx.strokeRect(tx + 0.5, ty + 0.5, tw - 1, 18);
+  ctx.fillStyle = magenta;
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  ctx.fillText(tag, tx + 7, ty + 10);
 }
 
 function render(d) {
-  $("minFreq").textContent = (d.min_freq / 1e6).toFixed(3) + " MHz";
+  $("minFreq").textContent = (d.min_freq / 1e6).toFixed(3);
   $("minSwr").textContent = d.min_swr.toFixed(2);
   $("bw").textContent = swr2Bandwidth(d);
+  $("z").textContent = d.min_z
+    ? `${d.min_z[0].toFixed(1)}${d.min_z[1] < 0 ? "−" : "+"}j${Math.abs(d.min_z[1]).toFixed(1)}`
+    : "–";
   for (const id of ["start", "stop"]) {
     if (document.activeElement !== $(id)) $(id).value = (d[id] / 1e6).toFixed(3);
   }
   draw(d);
 }
 
-async function poll() {
-  try {
-    const r = await fetch("/api/sweep", { cache: "no-store" });
-    const d = await r.json();
-    updateCal(d.cal);
-    if (d.error) {
-      setStatus(d.error, true);
-    } else {
-      last = d;
-      render(d);
-      setStatus("Updated " + new Date(d.timestamp * 1000).toLocaleTimeString() + " · " + d.device);
-    }
-  } catch {
-    setStatus("Server unreachable", true);
+function handle(d) {
+  updateCal(d.cal);
+  if (d.device) $("device").textContent = d.device;
+  if (d.error) {
+    setStatus(d.error, true);
+  } else {
+    last = d;
+    render(d);
+    blink();
+    setStatus("Updated " + new Date(d.timestamp * 1000).toLocaleTimeString() + " · " + d.device);
   }
-  setTimeout(poll, 1000);
+}
+
+// server pushes every new sweep (Server-Sent Events); EventSource reconnects by itself
+function connect() {
+  const es = new EventSource("/api/stream" + (token ? "?t=" + encodeURIComponent(token) : ""));
+  es.onmessage = e => handle(JSON.parse(e.data));
+  es.onerror = async () => {
+    if (es.readyState !== EventSource.CLOSED) {
+      setStatus("Connection lost – reconnecting…", true);
+      return;
+    }
+    // closed for good (e.g. 401): find out why, then retry
+    try {
+      const r = await api("/api/info");
+      setStatus(r.ok ? "Connection lost – reconnecting…" : (await r.json()).detail, true);
+    } catch {
+      setStatus("Server unreachable – retrying…", true);
+    }
+    setTimeout(connect, 3000);
+  };
 }
 
 let calBusy = false;
 function updateCal(cal) {
   $("cal").hidden = !cal;
   if (!cal || calBusy) return;
-  for (const b of document.querySelectorAll("#cal button")) {
+  for (const b of document.querySelectorAll("#cal button[data-std]")) {
     b.classList.toggle("done", cal.measured.includes(b.dataset.std));
   }
   $("calInfo").textContent = cal.valid
-    ? `Calibrated ${(cal.start / 1e6).toFixed(3)}–${(cal.stop / 1e6).toFixed(3)} MHz`
+    ? `Calibrated ${(cal.start / 1e6).toFixed(3)}–${(cal.stop / 1e6).toFixed(3)} MHz` +
+      (cal.created ? ` on ${new Date(cal.created * 1000).toLocaleString()}` : "") +
+      ". Recalibrate after changing cable or adapters."
     : "Not calibrated";
 }
 
-for (const b of document.querySelectorAll("#cal button")) {
+function setCalBusy(busy) {
+  document.querySelectorAll("#cal button").forEach(x => x.disabled = busy);
+  // keep ignoring server status briefly so a stale sweep doesn't overwrite the result message
+  if (busy) calBusy = true;
+  else setTimeout(() => calBusy = false, 1500);
+}
+
+for (const b of document.querySelectorAll("#cal button[data-std]")) {
   b.addEventListener("click", async () => {
-    calBusy = true;
-    document.querySelectorAll("#cal button").forEach(x => x.disabled = true);
+    setCalBusy(true);
     $("calInfo").textContent = `Measuring ${b.dataset.std}…`;
     try {
-      const r = await fetch(`/api/cal/${b.dataset.std}`, { method: "POST" });
+      const r = await api(`/api/cal/${b.dataset.std}`, { method: "POST" });
       const d = await r.json().catch(() => ({}));
-      $("calInfo").textContent = r.ok ? `${b.dataset.std} measured` : (d.detail ?? "Calibration failed");
-      if (r.ok) b.classList.add("done");
+      if (r.ok) {
+        if (d.discarded) document.querySelectorAll("#cal button.done").forEach(x => x.classList.remove("done"));
+        b.classList.add("done");
+        $("calInfo").textContent = `${b.dataset.std} measured` +
+          (d.discarded ? " – the range changed, so earlier standards were discarded" : "");
+      } else {
+        $("calInfo").textContent = d.detail ?? "Calibration failed";
+      }
     } catch {
       $("calInfo").textContent = "Server unreachable";
     }
-    document.querySelectorAll("#cal button").forEach(x => x.disabled = false);
-    setTimeout(() => calBusy = false, 1500);
+    setCalBusy(false);
   });
 }
+
+$("calClear").addEventListener("click", async () => {
+  if (!confirm("Delete the calibration?")) return;
+  setCalBusy(true);
+  const r = await api("/api/cal/clear", { method: "POST" }).catch(() => null);
+  document.querySelectorAll("#cal button.done").forEach(x => x.classList.remove("done"));
+  $("calInfo").textContent = r?.ok ? "Calibration deleted" : "Could not delete calibration";
+  setCalBusy(false);
+});
 
 $("band").addEventListener("change", e => {
   if (!e.target.value) return;
@@ -233,14 +503,30 @@ $("zoom").addEventListener("click", () => {
   if (!last) return;
   const half = Math.max((last.stop - last.start) / 10, 10e3);
   $("band").value = "";
-  setRange(Math.max(last.min_freq - half, 10e3), last.min_freq + half);
+  setRange(Math.max(last.min_freq - half, last.limits.min), Math.min(last.min_freq + half, last.limits.max));
 });
 window.addEventListener("resize", () => last && draw(last));
 
-fetch("/api/info").then(r => r.json()).then(({ url }) => {
-  $("urlText").textContent = url.replace("http://", "");
+function applyTheme(theme) {
+  const root = document.documentElement;
+  root.classList.add("no-transition");
+  root.dataset.theme = theme;
+  void document.body.offsetHeight;  // apply the new colors while transitions are off
+  localStorage.setItem("theme", theme);
+  $("theme").textContent = theme === "dark" ? "Light" : "Dark";
+  document.querySelector('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  if (last) draw(last);
+  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("no-transition")));
+}
+$("theme").addEventListener("click", () =>
+  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
+applyTheme(document.documentElement.dataset.theme);
+
+$("qrImg").src = "/qr.svg" + (token ? "?t=" + encodeURIComponent(token) : "");
+api("/api/info").then(r => r.json()).then(({ url }) => {
+  if (url) $("urlText").textContent = url.replace("http://", "");
 });
-poll();
+connect();
 </script>
 </body>
 </html>

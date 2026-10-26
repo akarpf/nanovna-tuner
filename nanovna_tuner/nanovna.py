@@ -33,6 +33,9 @@ class NanoVNA:
 
     name = "NanoVNA"
     raw = False
+    min_freq = 10_000
+    max_freq = 1_500_000_000
+    max_points = 401
 
     def __init__(self, port: str):
         self.ser = serial.Serial(port, 115200, timeout=15)
@@ -73,6 +76,9 @@ class NanoVNAV2:
 
     name = "NanoVNA V2"
     raw = True
+    min_freq = 50_000
+    max_freq = 3_000_000_000
+    max_points = 1024
 
     def __init__(self, port: str):
         self.ser = serial.Serial(port, 115200, timeout=2)
@@ -128,6 +134,9 @@ class SimulatedNanoVNA:
 
     name = "Simulator"
     raw = False
+    min_freq = 10_000
+    max_freq = 3_000_000_000
+    max_points = 1024
 
     def __init__(self, resonance_hz: float = 14_150_000, r: float = 58.0, q: float = 60.0):
         self.resonance_hz = resonance_hz

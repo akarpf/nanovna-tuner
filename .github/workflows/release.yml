@@ -1,0 +1,55 @@
+name: Release
+
+# Push a tag like v0.2.0 (must match nanovna_tuner/__init__.py) to build and publish standalone executables.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            asset: nanovna-tuner-macos-arm64
+          - os: windows-latest
+            asset: nanovna-tuner-windows-x64.exe
+          - os: ubuntu-latest
+            asset: nanovna-tuner-linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - name: Check tag matches version
+        shell: bash
+        run: test "${GITHUB_REF_NAME#v}" = "$(uv run --locked python -c 'import nanovna_tuner; print(nanovna_tuner.__version__)')"
+      - run: uv run --locked python -m pytest -q
+      - run: uv run --locked --extra tray --with pyinstaller pyinstaller --noconfirm --distpath dist packaging/nanovna-tuner.spec
+      - name: Rename executable
+        shell: bash
+        run: |
+          src=dist/nanovna-tuner
+          [ -f dist/nanovna-tuner.exe ] && src=dist/nanovna-tuner.exe
+          mv "$src" "dist/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: assets/*
+          generate_release_notes: true

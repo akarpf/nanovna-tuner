@@ -1,5 +1,6 @@
 import bisect
 import json
+import time
 from pathlib import Path
 
 STANDARDS = ("open", "short", "load")
@@ -23,10 +24,12 @@ class Calibration:
         self.e00: list[complex] = []
         self.e11: list[complex] = []
         self.t: list[complex] = []
+        self.created: float | None = None
         if path.exists():
             d = json.loads(path.read_text())
             self.freqs = d["freqs"]
             self.e00, self.e11, self.t = ([complex(*v) for v in d[k]] for k in ("e00", "e11", "t"))
+            self.created = d.get("created")
 
     @property
     def valid(self) -> bool:
@@ -38,15 +41,24 @@ class Calibration:
             "measured": [s for s in STANDARDS if s in self.measured],
             "start": self.freqs[0] if self.valid else None,
             "stop": self.freqs[-1] if self.valid else None,
+            "created": self.created,
         }
 
-    def measure(self, standard: str, freqs: list[int], values: list[complex]) -> None:
-        # standards from a different sweep range can't be combined
-        if any(f != freqs for f, _ in self.measured.values()):
+    def clear(self) -> None:
+        self.measured.clear()
+        self.freqs, self.e00, self.e11, self.t = [], [], [], []
+        self.created = None
+        self.path.unlink(missing_ok=True)
+
+    def measure(self, standard: str, freqs: list[int], values: list[complex]) -> bool:
+        """Returns True if previously measured standards were discarded because the range changed."""
+        discarded = any(f != freqs for f, _ in self.measured.values())
+        if discarded:
             self.measured.clear()
         self.measured[standard] = (freqs, values)
         if len(self.measured) == len(STANDARDS):
             self._solve()
+        return discarded
 
     def _solve(self) -> None:
         freqs = self.measured["open"][0]
@@ -57,10 +69,12 @@ class Calibration:
             e11.append(a)
             t.append((o - l) * (1 - a))
         self.freqs, self.e00, self.e11, self.t = freqs, e00, e11, t
+        self.created = time.time()
         self.measured.clear()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps({
             "freqs": freqs,
+            "created": self.created,
             **{k: [[v.real, v.imag] for v in getattr(self, k)] for k in ("e00", "e11", "t")},
         }))
 
