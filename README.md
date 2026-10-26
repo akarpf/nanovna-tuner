@@ -37,6 +37,8 @@ sudo usermod -aG dialout $USER && chmod +x nanovna-tuner-linux-x64
 
 Open `http://localhost:8000` on the computer, tap **QR** and scan the code with your phone (same Wi‑Fi). Stop with Ctrl+C.
 
+<img src="docs/screenshot-qr.png" alt="QR button opened, showing the code to scan with the phone" width="600">
+
 ## Options
 
 | Option | Default | |
@@ -65,6 +67,7 @@ Your phone gets access via a token in the QR code. Meant for your home network o
 ```sh
 uv run python -m nanovna_tuner --simulate   # run from source
 uv run python -m pytest                     # tests
+uv run ruff check . && uv run ruff format . # lint + format
 ```
 
 Release: bump `__version__` in `nanovna_tuner/__init__.py`, then push a matching tag (`git tag v0.2.1 && git push origin v0.2.1`). GitHub builds the executables.

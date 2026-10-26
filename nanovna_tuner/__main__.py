@@ -39,21 +39,28 @@ def bind(host: str, port: int) -> socket.socket:
     try:
         sock.bind((host, port))
     except OSError:
-        sys.exit(f"Port {port} is already in use - is nanovna-tuner already running? "
-                 f"Stop it or choose another port with --http-port.")
+        sys.exit(
+            f"Port {port} is already in use - is nanovna-tuner already running? "
+            f"Stop it or choose another port with --http-port."
+        )
     return sock
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Serve live NanoVNA SWR sweeps over HTTP",
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--version", action="version", version=(
-        f"nanovna-tuner {__version__}\n"
-        "Copyright (C) 2026 Andreas Karpf\n"
-        "License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\n"
-        "This is free software: you are free to change and redistribute it.\n"
-        "There is NO WARRANTY, to the extent permitted by law."
-    ))
+    p = argparse.ArgumentParser(
+        description="Serve live NanoVNA SWR sweeps over HTTP", formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--version",
+        action="version",
+        version=(
+            f"nanovna-tuner {__version__}\n"
+            "Copyright (C) 2026 Andreas Karpf\n"
+            "License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\n"
+            "This is free software: you are free to change and redistribute it.\n"
+            "There is NO WARRANTY, to the extent permitted by law."
+        ),
+    )
     p.add_argument("--port", help="serial port (default: auto-detect)")
     p.add_argument("--simulate", action="store_true", help="use a simulated antenna instead of a NanoVNA")
     p.add_argument("--start", type=float, default=1.0, help="start frequency in MHz (default 1)")
@@ -61,8 +68,10 @@ def main() -> None:
     p.add_argument("--points", type=points, default=101, help="points per sweep, 11-1024 (default 101)")
     p.add_argument("--host", default="0.0.0.0", help="HTTP bind address (default 0.0.0.0)")
     p.add_argument("--http-port", type=int, default=8000, help="HTTP port (default 8000)")
-    p.add_argument("--url", help="address for the phone link/QR code, e.g. http://192.168.1.20:8000 "
-                                 "(default: detected automatically)")
+    p.add_argument(
+        "--url",
+        help="address for the phone link/QR code, e.g. http://192.168.1.20:8000 (default: detected automatically)",
+    )
     p.add_argument("--tray", action="store_true", help="show a tray / menu-bar icon (needs: uv sync --extra tray)")
     args = p.parse_args()
     if args.stop <= args.start:

@@ -1,6 +1,7 @@
 # Copyright (C) 2026 Andreas Karpf
 # SPDX-License-Identifier: GPL-3.0-or-later
 import asyncio
+import contextlib
 import io
 import json
 import logging
@@ -145,10 +146,8 @@ class SweepWorker(threading.Thread):
                     cal_request["error"] = str(e)
                     cal_request["done"].set()
                 if device is not None:
-                    try:
+                    with contextlib.suppress(Exception):
                         device.close()
-                    except Exception:
-                        pass
                     device = None
                 time.sleep(2)
                 continue
@@ -184,17 +183,19 @@ class SweepWorker(threading.Thread):
             swrs = [round(swr(g), 3) for g in gammas]
             i = min(range(len(swrs)), key=swrs.__getitem__)
             z = impedance(gammas[i])
-            self._publish({
-                "error": None,
-                "timestamp": time.time(),
-                **info,
-                "freqs": freqs,
-                "swr": swrs,
-                "min_index": i,
-                "min_freq": freqs[i],
-                "min_swr": swrs[i],
-                "min_z": [round(z.real, 1), round(z.imag, 1)] if z is not None else None,
-            })
+            self._publish(
+                {
+                    "error": None,
+                    "timestamp": time.time(),
+                    **info,
+                    "freqs": freqs,
+                    "swr": swrs,
+                    "min_index": i,
+                    "min_freq": freqs[i],
+                    "min_swr": swrs[i],
+                    "min_z": [round(z.real, 1), round(z.imag, 1)] if z is not None else None,
+                }
+            )
 
 
 def create_app(worker: SweepWorker, lan_url: str, token: str) -> FastAPI:
@@ -250,7 +251,7 @@ def create_app(worker: SweepWorker, lan_url: str, token: str) -> FastAPI:
         try:
             worker.set_range(r.start, r.stop)
         except ValueError as e:
-            raise HTTPException(422, str(e))
+            raise HTTPException(422, str(e)) from e
         return r
 
     @app.post("/api/cal/clear", dependencies=protected)

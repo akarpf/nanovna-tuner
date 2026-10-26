@@ -33,6 +33,7 @@ def _use_system_symbol(icon) -> None:
 
     icon._assert_image = assert_image
 
+
 def run_with_tray(server: uvicorn.Server, sockets: list, local_url: str) -> None:
     """Runs the web server in a thread and a tray/menu-bar icon on the main thread (required on macOS)."""
     import pystray

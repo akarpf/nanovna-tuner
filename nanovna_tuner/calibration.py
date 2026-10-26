@@ -65,31 +65,33 @@ class Calibration:
     def _solve(self) -> None:
         freqs = self.measured["open"][0]
         e00, e11, t = [], [], []
-        for o, s, l in zip(*(self.measured[n][1] for n in STANDARDS)):
-            a = (o + s - 2 * l) / (o - s)
-            e00.append(l)
+        for open_, short, load in zip(*(self.measured[n][1] for n in STANDARDS), strict=True):
+            a = (open_ + short - 2 * load) / (open_ - short)
+            e00.append(load)
             e11.append(a)
-            t.append((o - l) * (1 - a))
+            t.append((open_ - load) * (1 - a))
         self.freqs, self.e00, self.e11, self.t = freqs, e00, e11, t
         self.created = time.time()
         self.measured.clear()
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps({
-            "freqs": freqs,
-            "created": self.created,
-            **{k: [[v.real, v.imag] for v in getattr(self, k)] for k in ("e00", "e11", "t")},
-        }))
+        self.path.write_text(
+            json.dumps(
+                {
+                    "freqs": freqs,
+                    "created": self.created,
+                    **{k: [[v.real, v.imag] for v in getattr(self, k)] for k in ("e00", "e11", "t")},
+                }
+            )
+        )
 
     def apply(self, freqs: list[int], raw: list[complex]) -> list[complex]:
         if not self.valid:
             raise RuntimeError("Calibration needed: measure Open, Short and Load")
         lo, hi = self.freqs[0], self.freqs[-1]
         if freqs[0] < lo or freqs[-1] > hi:
-            raise RuntimeError(
-                f"Sweep is outside the calibrated range {lo / 1e6:.3f}–{hi / 1e6:.3f} MHz - recalibrate"
-            )
+            raise RuntimeError(f"Sweep is outside the calibrated range {lo / 1e6:.3f}–{hi / 1e6:.3f} MHz - recalibrate")
         out = []
-        for f, m in zip(freqs, raw):
+        for f, m in zip(freqs, raw, strict=True):
             d = m - _interp(self.freqs, self.e00, f)
             out.append(d / (_interp(self.freqs, self.t, f) + _interp(self.freqs, self.e11, f) * d))
         return out
