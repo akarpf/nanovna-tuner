@@ -153,12 +153,17 @@
   #apply { border-color: var(--line-strong); background: rgba(var(--accent-rgb), 0.08); }
 
   .actions { flex: 1 1 auto; display: flex; gap: 10px; align-items: flex-start; }
-  #url { font-size: 0.7rem; color: var(--cyan-dim); letter-spacing: 0.05em; }
+  #url { position: relative; font-size: 0.7rem; color: var(--cyan-dim); letter-spacing: 0.05em; }
   #url summary { display: inline-block; list-style: none; }
   #url summary::-webkit-details-marker { display: none; }
   #url[open] summary { border-color: var(--line-strong); }
+  #url .pop {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 5;
+    padding: 8px; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 2px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  }
   /* QR codes need a light quiet zone to scan reliably */
-  #url img { display: block; width: 100px; height: 100px; margin: 8px 0 4px; background: #fff; padding: 4px; border-radius: 2px; }
+  #url img { display: block; width: 120px; height: 120px; margin-bottom: 6px; background: #fff; padding: 4px; border-radius: 2px; }
 
   #status { margin-top: 10px; font-size: 0.68rem; color: var(--cyan-dim); letter-spacing: 0.1em; }
   #status::before { content: "› "; color: var(--line-strong); }
@@ -227,7 +232,7 @@
     <button id="zoom">Zoom to min</button>
     <details id="url">
       <summary>QR</summary>
-      <img id="qrImg" alt="QR code"><span id="urlText"></span>
+      <div class="pop"><img id="qrImg" alt="QR code"><span id="urlText"></span></div>
     </details>
   </div>
 </div>
